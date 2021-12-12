@@ -11,15 +11,30 @@ from fastapi.responses import FileResponse
 from starlette.background import BackgroundTasks
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse
-
+from fastapi.middleware.cors import CORSMiddleware
+ 
+ 
 app = FastAPI()
+ 
+origins = ["*"]
+ 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    #allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+ 
+ 
+ 
 templates = Jinja2Templates(directory="templates")
-
-
+ 
+ 
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
     return templates.TemplateResponse("index.html", {"request":request})
-
+ 
 @app.get("/to_base64", tags=['tvl to base64'])
 async def get_base64_endpoint(
     seller_name: str, 
@@ -27,18 +42,18 @@ async def get_base64_endpoint(
     total: str,
     tax_amount: Optional[str] = None,
     date: Optional[str] = str(datetime.datetime.now())):
-
+ 
     tax_amount = tax_amount if tax_amount is not None else str(float(total)*0.15)
-
+ 
     fatoora = PyFatoora(seller_name,
         tax_number,
         date,
         total,
         tax_amount)
-
+ 
     tlv_as_base64 = fatoora.tlv_to_base64()
     return {"TLV_to_base64": tlv_as_base64}
-
+ 
 @app.post("/to_base64", tags=['tvl to base64'])
 async def post_base64_endpoint(invoice_data : InvoiceData):
     fatoora = PyFatoora(invoice_data.seller_name,
@@ -46,10 +61,10 @@ async def post_base64_endpoint(invoice_data : InvoiceData):
         invoice_data.invoice_date,
         invoice_data.total_amount,
         invoice_data.tax_amount)
-
+ 
     tlv_as_base64 = fatoora.tlv_to_base64()
     return {"TLV_to_base64": tlv_as_base64}
-
+ 
 @app.get("/to_qrcode_image", response_class=FileResponse, tags=['QR-code'])
 async def qrcode_image_endpoint(
     seller_name: str, 
@@ -59,9 +74,9 @@ async def qrcode_image_endpoint(
     tax_amount: Optional[str] = None,
     date: Optional[str] = str(datetime.datetime.now())
     ):
-
+ 
     tax_amount = tax_amount if tax_amount is not None else str(float(total)*0.15)
-
+ 
     fatoora = PyFatoora(seller_name,
         tax_number,
         date,
@@ -70,11 +85,11 @@ async def qrcode_image_endpoint(
     
     qrcode_image = fatoora.render_qrcode_image()
     qrcode_image.save("qr_code_img.png")
-
+ 
     background_tasks.add_task(os.remove, "qr_code_img.png")
     return FileResponse("qr_code_img.png", background=background_tasks)
-
-
+ 
+ 
 @app.post("/to_qrcode_image", response_class=FileResponse, tags=['QR-code'])
 async def qrcode_image_endpoint(invoice_data: InvoiceData, background_tasks: BackgroundTasks):
     fatoora = PyFatoora(invoice_data.seller_name,
@@ -86,10 +101,10 @@ async def qrcode_image_endpoint(invoice_data: InvoiceData, background_tasks: Bac
     qrcode_image = fatoora.render_qrcode_image()
     print(type(qrcode_image))
     qrcode_image.save("qr_code_img.png")
-
+ 
     background_tasks.add_task(os.remove, "qr_code_img.png")
     return FileResponse("qr_code_img.png", background=background_tasks)
-
+ 
 @app.post("/submitform")
 def handle_form(background_tasks: BackgroundTasks,
                     seller_name: str = Form(...), 
@@ -114,13 +129,13 @@ def handle_form(background_tasks: BackgroundTasks,
     
     qrcode_image = fatoora.render_qrcode_image()
     qrcode_image.save("qr_code_img.png")
-
+ 
     # background task to delete the created image from the server
     # after it return to the user
     background_tasks.add_task(os.remove, "qr_code_img.png")
     return FileResponse("qr_code_img.png", background=background_tasks)
-
-
+ 
+ 
 @app.post("/read_qrcode_image", status_code=202, tags=['read QR-code image'])
 async def read_qrcode_image(image: UploadFile = File(...)):
     if pathlib.Path(image.filename).suffix != ".png":
@@ -128,7 +143,7 @@ async def read_qrcode_image(image: UploadFile = File(...)):
     
     pyfat = PyFatoora()
     return pyfat.read_qrcode_image(BytesIO(image.file.read()))
-
+ 
 @app.get("/full_fatoora")
 async def full_fat(
     request: Request,
@@ -138,7 +153,7 @@ async def full_fat(
     tax_amount: Optional[str] = None,
     date: Optional[str] = str(datetime.datetime.now()),
     fat_number: Optional[str] = random.randint(1000, 9999)):
-
+ 
     tax_amount = tax_amount if tax_amount is not None else str(float(total)*0.15)
     
     data = {
@@ -149,5 +164,5 @@ async def full_fat(
         "total": total,
         "tax_amount": tax_amount
     }
-
+ 
     return templates.TemplateResponse("fatoora.html", {"request":request, "data":data})
